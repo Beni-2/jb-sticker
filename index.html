@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>Sticker Generator - Secure Auth & Logging</title>
+    <title>JB Stickers - Production Console</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
         :root {
@@ -179,7 +179,7 @@
 
 <div id="auth-overlay">
     <div class="auth-card" id="login-view">
-        <h2 id="app-title">Production Sign In</h2>
+        <h2>JB Stickers Sign In</h2>
         <p>Enter Name/ID and authorized Access Code</p>
         <div class="auth-field">
             <label>USER ID / OPERATOR NAME</label>
@@ -189,15 +189,15 @@
             <label>ACCESS CODE (PASSWORD)</label>
             <input type="password" id="login-pass" placeholder="••••••••">
         </div>
-        <button class="btn-primary" style="width:100%; padding: 14px;" id="login-btn">Sign In to System</button>
-        <p id="auth-status" style="margin-top: 10px; font-size: 0.75rem; text-align: center; color: #64748b;">Initializing...</p>
+        <button class="btn-primary" style="width:100%; padding: 14px;" id="login-btn">Sign In to JB Stickers</button>
+        <p id="auth-status" style="margin-top: 10px; font-size: 0.75rem; text-align: center; color: #64748b;">Initializing Secure Connection...</p>
     </div>
 
     <div class="auth-card" id="unauthorized-view">
         <div class="flashing-error" id="error-title">UNAUTHORIZED USER</div>
         <p id="error-msg">The access code provided does not meet requirements.</p>
         <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 20px;">
-            Please contact administrator if you require access assistance.
+            Please contact benitoamurao@yahoo.com if you require assistance.
         </p>
         <button class="btn-danger" style="width:100%; padding: 14px;" id="try-again-btn">RETRY</button>
     </div>
@@ -206,7 +206,7 @@
 <div class="container" id="app-container" style="display:none">
     <div class="panel">
         <div class="panel-header">
-            <h1>Sticker Production Console</h1>
+            <h1>JB Stickers Production Console</h1>
         </div>
 
         <div class="input-grid">
@@ -237,7 +237,7 @@
                 <input type="text" id="exp" placeholder="31-DEC-2026" />
             </div>
             <div class="field">
-                <label>STP (Pages)</label>
+                <label>1 PAGE EQUALS 32 STICKERS ON GOOGLE DOCS</label>
                 <input type="number" id="pcs-count" min="1" max="32" value="1" />
             </div>
         </div>
@@ -253,7 +253,7 @@
             --- PRODUCTION PRINT PREVIEW (A4) ---
         </div>
         <div style="text-align: center; margin-bottom: 20px; color: #64748b; font-size: 0.85rem;" id="preview-instruction">
-            Standard 44 Labels per Sheet
+            Standard 44 Labels per Sheet Matrix
         </div>
     </div>
     <div class="sheet-container" id="sheet-preview"></div>
@@ -285,10 +285,10 @@
         <div id="printer-error-view" style="display: none; text-align: center; padding: 20px 0;">
             <div style="font-size: 3rem; margin-bottom: 10px;">🖨️❌</div>
             <h2 style="color: var(--danger); margin-bottom: 10px;">NO PRINTER DETECTED</h2>
-            <p style="color: #64748b; margin-bottom: 25px;">Hardware detection failed. Formatting output to Document format at 32 labels per page.</p>
+            <p style="color: #64748b; margin-bottom: 25px;">Handshake failed. Redirecting output to centered Google Docs format (32 labels/page).</p>
             <div style="display: flex; gap: 10px;">
                 <button class="btn-secondary" id="printer-retry" style="flex: 1; padding: 12px;">Retry Handshake</button>
-                <button class="btn-primary" id="printer-continue" style="flex: 1; padding: 12px; background: var(--success);">Continue (Download)</button>
+                <button class="btn-primary" id="printer-continue" style="flex: 1; padding: 12px; background: var(--success);">Continue (GDocs)</button>
             </div>
         </div>
     </div>
@@ -298,8 +298,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-    // --- CONFIGURE YOUR FIREBASE HERE ---
-    // You can find these in Project Settings > General in your Firebase Console
+    // Configuration placeholders for Firebase
     const firebaseConfig = {
         apiKey: "YOUR_API_KEY",
         authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -309,27 +308,23 @@
         appId: "YOUR_APP_ID"
     };
 
-    // Attempt to initialize. If placeholders are still there, we'll run in local mode.
     let app, auth;
     const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
 
     if (isConfigured) {
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
-        
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 document.getElementById('auth-status').innerText = "System Ready.";
                 document.getElementById('auth-status').style.color = "var(--success)";
             }
         });
-
-        signInAnonymously(auth).catch(err => {
-            console.error("Auth failed:", err);
+        signInAnonymously(auth).catch(() => {
             document.getElementById('auth-status').innerText = "Auth Offline (Local Mode)";
         });
     } else {
-        document.getElementById('auth-status').innerText = "Local Mode Active (No Firebase)";
+        document.getElementById('auth-status').innerText = "Local Environment Active.";
     }
 
     let currentUserProfile = null;
@@ -357,7 +352,6 @@
 
         if(sheetPreview) { sheetPreview.innerHTML = ""; sheetPreview.style.display = 'none'; }
         if(previewStatus) previewStatus.innerText = "--- PRODUCTION PRINT PREVIEW (A4) ---";
-        if(previewInstruction) previewInstruction.innerText = "(Waiting for production data...)";
         
         verificationView.style.display = 'block';
         printerErrorView.style.display = 'none';
@@ -395,8 +389,6 @@
         const id = document.getElementById('login-id').value.trim();
         const pass = document.getElementById('login-pass').value.trim();
         if (!id || !pass) return;
-        
-        // Security logic: check for specific code suffixes
         const codeSuffixRegex = /(855|866|877|888)$/;
         if (pass.match(codeSuffixRegex)) {
             currentUserProfile = { name: id, displayName: `${id} (${pass.slice(-3)})` };
@@ -415,9 +407,8 @@
     };
 
     function calculateExpiry() {
-        const mfgVal = mfgInput.value;
         if (durInput.value === 'custom') return;
-        const mfgDate = parseDate(mfgVal);
+        const mfgDate = parseDate(mfgInput.value);
         if (!mfgDate) return;
         const expDate = new Date(mfgDate);
         expDate.setMonth(expDate.getMonth() + parseInt(durInput.value));
@@ -473,11 +464,10 @@
         printHistory.forEach(row => { 
             csvContent += `"${row.timestamp}","${row.user}","${row.type}","${row.lot}","${row.mfg}","${row.exp}"\n`; 
         });
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
+        const blob = new Blob(['\ufeff', csvContent], { type: 'text/csv;charset=utf-8;' });
         const a = document.createElement('a'); 
-        a.href = url; 
-        a.download = `Production_Log_${new Date().getTime()}.csv`; 
+        a.href = URL.createObjectURL(blob);
+        a.download = `JB_Stickers_Master_Log.csv`; 
         document.body.appendChild(a);
         a.click(); 
         document.body.removeChild(a);
@@ -514,13 +504,10 @@
             <body style="margin:0; padding:0;">${tableContent}</body></html>`;
         const link = document.createElement('a');
         link.href = URL.createObjectURL(new Blob(['\ufeff', htmlBlob], { type: 'application/msword' }));
-        link.download = `Batch_Labels_${lot}.doc`;
+        link.download = `JB_Stickers_Batch_${lot}.doc`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
-        logEvent("Document Export");
-        executeAutoCSVSave();
         forceSystemReset(false); 
         document.getElementById('custom-modal').style.display = 'none';
     };
@@ -529,7 +516,6 @@
         lcd.innerText = "CHECKING HARDWARE...";
         lcd.style.color = "#ff9800"; 
         setTimeout(() => {
-            // Simulated printer detection (defaults to false for web security reasons)
             const printerAvailable = false; 
             if (!printerAvailable) {
                 lcd.innerText = "NO PRINTER DETECTED";
@@ -554,7 +540,10 @@
 
         if (!lot) { showError("ERROR", "Please enter Lot Number."); return; }
         if (!mfgRaw || !expRaw) { showError("ERROR", "Dates are required."); return; }
+        
+        // JOB CAPACITY VALIDATION
         if (isNaN(pages) || pages < 1) { showError("ERROR", "Invalid page quantity."); return; }
+        if (pages > 32) { showError("ERROR", "MAX FOR 1 PRINTING JOB IS 32 PAGES"); return; }
 
         const mfgDate = parseDate(mfgRaw);
         const expDate = parseDate(expRaw);
@@ -565,7 +554,7 @@
         }
 
         if (mfgDate >= expDate) {
-            showError("DATE CONFLICT", "MFG must be before EXP.");
+            showError("WRONG DATES", "Manufacturing date must be before Expiration date.");
             return;
         }
 
@@ -576,14 +565,15 @@
             <div><strong>Lot No:</strong> ${lot.toUpperCase()}</div>
             <div><strong>MFG:</strong> ${mfgRaw.toUpperCase()}</div>
             <div><strong>EXP:</strong> ${expRaw.toUpperCase()}</div>
-            <div><strong>Batch:</strong> ${pages} Sheet(s)</div>`;
+            <div><strong>Batch:</strong> ${pages} Page(s)</div>`;
         document.getElementById('custom-modal').style.display = 'flex';
     };
 
-    document.getElementById('modal-edit').onclick = () => { document.getElementById('custom-modal').style.display = 'none'; };
+    document.getElementById('modal-edit').onclick = () => { forceSystemReset(false); document.getElementById('custom-modal').style.display = 'none'; };
     document.getElementById('modal-print').onclick = attemptPrint;
     document.getElementById('printer-retry').onclick = attemptPrint;
     document.getElementById('printer-continue').onclick = executeDownloadDoc; 
+
     document.getElementById('mfg').oninput = calculateExpiry;
     document.getElementById('duration').onchange = () => { 
         expInput.disabled = durInput.value !== 'custom'; 
