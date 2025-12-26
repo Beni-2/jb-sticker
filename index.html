@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Sticker Generator - Secure Auth & Logging</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        :root {
+            --primary: #0a7cff;
+            --primary-hover: #005cc5;
+            --success: #10b981;
+            --danger: #ef4444;
+            --bg: #f4f7f9;
+            --panel-bg: #ffffff;
+            --text: #333;
+            --border: #d1d9e0;
+            --lcd-bg: #1a1a1a;
+            --lcd-text: #00ff41;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* --- AUTH & ERROR STYLES --- */
+        #auth-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .auth-card {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .auth-card h2 { margin: 0 0 8px 0; font-size: 1.5rem; color: #111; }
+        .auth-card p { font-size: 0.9rem; color: #64748b; margin-bottom: 24px; }
+
+        .auth-field { margin-bottom: 16px; text-align: left; }
+        .auth-field label { display: block; font-weight: 600; font-size: 0.8rem; margin-bottom: 6px; color: #475569; }
+        .auth-field input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; box-sizing: border-box; outline-color: var(--primary); }
+
+        #unauthorized-view { display: none; }
+        .flashing-error {
+            color: var(--danger);
+            font-weight: 900;
+            font-size: 1.6rem;
+            margin-bottom: 20px;
+            animation: flash 0.4s infinite alternate;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        @keyframes flash {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0.3; transform: scale(1.02); }
+        }
+
+        /* --- MAIN APP STYLES --- */
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+        .panel { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 24px; }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        label { font-weight: 600; font-size: 0.85rem; color: #555; }
+        input, select { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: white; }
+        .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); filter: brightness(1.05); }
+        button:active { transform: translateY(0) scale(0.96); box-shadow: 0 2px 4px rgba(0,0,0,0.1); filter: brightness(0.95); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-secondary { background: #e2e8f0; color: #475569; }
+        .btn-print { background: #334155; color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+
+        /* Custom Modal System */
+        #custom-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal-content { background: white; padding: 28px; border-radius: 16px; max-width: 800px; width: 95%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); max-height: 95vh; overflow-y: auto; position: relative; }
+        .printer-display { background: var(--lcd-bg); color: var(--lcd-text); font-family: 'Courier New', Courier, monospace; padding: 18px; border-radius: 4px; border: 6px solid #444; margin-bottom: 20px; text-transform: uppercase; font-size: 1rem; min-height: 50px; display: flex; align-items: center; justify-content: center; text-align: center; }
+
+        /* --- PRINT PREVIEW AREA --- */
+        .sheet-container { 
+            display: none; 
+            flex-direction: column; 
+            align-items: center; 
+            background: #374151; 
+            padding: 50px 0; 
+            gap: 50px; 
+            margin-top: 20px;
+            border-top: 4px solid var(--primary);
+        }
+
+        .page {
+            background: white;
+            width: 210mm;
+            height: 297mm;
+            padding-top: 0.345in;
+            padding-left: 0.135in;
+            box-sizing: border-box;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+            position: relative;
+            overflow: hidden;
+            display: block;
+            page-break-after: always;
+        }
+
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(4, 2in); 
+            grid-auto-rows: 1in; 
+            width: 8in; 
+            height: 11in; 
+        }
+
+        .sticker { 
+            width: 2in; 
+            height: 1in; 
+            box-sizing: border-box; 
+            border: 0.5pt solid #000; 
+            padding: 0.1in; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            font-family: Arial, sans-serif; 
+            font-size: 8.5pt; 
+            line-height: 1.3; 
+            color: #000; 
+            background: #fff;
+        }
+
+        .sticker-line { display: flex; overflow: hidden; white-space: nowrap; }
+        .sticker-label { font-weight: bold; width: 0.55in; flex-shrink: 0; }
+
+        @media print {
+            @page { margin: 0; size: A4; }
+            html, body { margin: 0; padding: 0; background: none; }
+            .container, #auth-overlay, #custom-modal, .actions, .panel, #preview-status, #preview-instruction { display: none !important; }
+            .sheet-container { padding: 0; background: none; display: block !important; margin: 0; border-top: none; gap: 0; }
+            .page { box-shadow: none; margin: 0; visibility: visible; position: relative; top: 0; }
+            .page:last-child { page-break-after: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="auth-overlay">
+    <div class="auth-card" id="login-view">
+        <h2>Production Sign In</h2>
+        <p>Enter Name/ID and authorized Access Code</p>
+        <div class="auth-field">
+            <label>USER ID / OPERATOR NAME</label>
+            <input type="text" id="login-id" placeholder="e.g. John Doe">
+        </div>
+        <div class="auth-field">
+            <label>ACCESS CODE (PASSWORD)</label>
+            <input type="password" id="login-pass" placeholder="••••••••">
+        </div>
+        <button class="btn-primary" style="width:100%; padding: 14px;" id="login-btn" disabled>Waiting for Auth...</button>
+        <p id="auth-status" style="margin-top: 10px; font-size: 0.75rem; text-align: center; color: #64748b;">Initializing Secure Connection...</p>
+    </div>
+
+    <div class="auth-card" id="unauthorized-view">
+        <div class="flashing-error" id="error-title">UNAUTHORIZED USER</div>
+        <p id="error-msg">The access code provided does not meet requirements.</p>
+        <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 20px;">
+            Please contact benitoamurao@yahoo.com if you require access assistance.
+        </p>
+        <button class="btn-danger" style="width:100%; padding: 14px;" id="try-again-btn">RETRY</button>
+    </div>
+</div>
+
+<div class="container" id="app-container" style="display:none">
+    <div class="panel">
+        <div class="panel-header">
+            <h1>Sticker Production Console</h1>
+        </div>
+
+        <div class="input-grid">
+            <div class="field" style="grid-column: span 2;">
+                <label>OPERATOR / TECHNICIAN (NAME & CODE)</label>
+                <input type="text" id="user-name" disabled style="background:#f1f5f9; font-weight:bold;">
+            </div>
+            <div class="field">
+                <label>LOT NUMBER</label>
+                <input type="text" id="lot" placeholder="e.g. 003-02-01" />
+            </div>
+            <div class="field">
+                <label>MFG DATE (DD-MMM-YYYY)</label>
+                <input type="text" id="mfg" placeholder="25-DEC-2025" />
+            </div>
+            <div class="field">
+                <label>EXPIRY DURATION</label>
+                <select id="duration">
+                    <option value="3">3 Months</option>
+                    <option value="6">6 Months</option>
+                    <option value="9">9 Months</option>
+                    <option value="12">12 Months</option>
+                    <option value="custom" selected>Custom Entry</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>EXP DATE (DD-MMM-YYYY)</label>
+                <input type="text" id="exp" placeholder="31-DEC-2026" />
+            </div>
+            <div class="field">
+                <label>1 PAGE EQUALS 32 STICKERS ON GOOGLE DOCS</label>
+                <input type="number" id="pcs-count" min="1" max="32" value="1" />
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn-primary" id="generateBtn" style="flex: 1; padding:15px; font-size:1rem;">Validate Batch Details</button>
+            <button class="btn-danger" id="logout-btn">Sign Out</button>
+        </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; align-items: center;">
+        <div style="text-align: center; margin: 10px 0 10px 0; color: #1e293b; font-size: 1.1rem; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;" id="preview-status">
+            --- PRODUCTION PRINT PREVIEW (A4) ---
+        </div>
+        <div style="text-align: center; margin-bottom: 20px; color: #64748b; font-size: 0.85rem;" id="preview-instruction">
+            Full 4x11 Matrix Population - Total 44 Labels per Sheet
+        </div>
+    </div>
+    <div class="sheet-container" id="sheet-preview"></div>
+</div>
+
+<div id="custom-modal">
+    <div class="modal-content">
+        <div class="printer-display" id="printer-lcd">PRINTER READY</div>
+        
+        <div id="verification-view">
+            <div id="confirm-box" style="margin-bottom:20px; display:grid; grid-template-columns:1fr 1fr; gap:10px; background:#f8fafc; padding:16px; border-radius:8px"></div>
+            
+            <div class="checklist" style="border-left: 4px solid var(--primary); padding-left: 15px; margin-bottom: 25px; background: #f1f5f9; padding-top: 12px; padding-bottom: 12px; border-radius: 0 8px 8px 0;">
+                <h3 style="margin:0 0 10px 0; font-size:0.9rem; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Protocol Reminders</h3>
+                <p style="font-size:0.85rem; margin: 0 0 6px 0; color: #475569; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: var(--primary);">•</span> Ensure Printer is Authenticated & Online
+                </p>
+                <p style="font-size:0.85rem; margin: 0; color: #475569; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: var(--primary);">•</span> Verify Batch Paper (A4 Label) is Loaded
+                </p>
+            </div>
+
+            <div class="modal-btns" style="margin-top:20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn-secondary" id="modal-edit" style="flex: 1;">Cancel</button>
+                <button class="btn-print" id="modal-print" style="flex: 1; background: #334155; color: white;">Initiate Print</button>
+            </div>
+        </div>
+
+        <div id="printer-error-view" style="display: none; text-align: center; padding: 20px 0;">
+            <div style="font-size: 3rem; margin-bottom: 10px;">🖨️❌</div>
+            <h2 style="color: var(--danger); margin-bottom: 10px;">NO PRINTER DETECTED</h2>
+            <p style="color: #64748b; margin-bottom: 25px;">Hardware detection failed. Formatting output to Google Docs (.doc) at 32 labels per page.</p>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-secondary" id="printer-retry" style="flex: 1; padding: 12px;">Retry Handshake</button>
+                <button class="btn-primary" id="printer-continue" style="flex: 1; padding: 12px; background: var(--success);">Continue (GDocs)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    let currentUserProfile = null;
+    let printHistory = []; 
+    let authenticatedUser = null;
+
+    const sheetPreview = document.getElementById('sheet-preview');
+    const previewStatus = document.getElementById('preview-status');
+    const previewInstruction = document.getElementById('preview-instruction');
+    const lotInput = document.getElementById('lot');
+    const mfgInput = document.getElementById('mfg');
+    const expInput = document.getElementById('exp');
+    const durInput = document.getElementById('duration');
+    const qtyInput = document.getElementById('pcs-count');
+    const lcd = document.getElementById('printer-lcd');
+    const verificationView = document.getElementById('verification-view');
+    const printerErrorView = document.getElementById('printer-error-view');
+
+    const forceSystemReset = (clearHistory = true) => {
+        const todayStr = formatDate(new Date());
+        if(lotInput) lotInput.value = ""; 
+        if(mfgInput) mfgInput.value = todayStr; 
+        if(durInput) durInput.value = "custom"; 
+        if(expInput) { expInput.value = todayStr; expInput.disabled = false; }
+        if(qtyInput) qtyInput.value = 1; 
+
+        if(sheetPreview) { sheetPreview.innerHTML = ""; sheetPreview.style.display = 'none'; }
+        if(previewStatus) previewStatus.innerText = "--- PRODUCTION PRINT PREVIEW (A4) ---";
+        if(previewInstruction) previewInstruction.innerText = "(Waiting for production data to saturate print area...)";
+        
+        verificationView.style.display = 'block';
+        printerErrorView.style.display = 'none';
+        lcd.innerText = "PRINTER READY";
+        lcd.style.color = "";
+
+        if (clearHistory) {
+            printHistory = []; 
+        }
+    };
+
+    onAuthStateChanged(auth, (user) => {
+        authenticatedUser = user;
+        if (user) {
+            document.getElementById('login-btn').disabled = false;
+            document.getElementById('login-btn').innerText = "Sign In to System";
+            document.getElementById('auth-status').innerText = "Secure Connection Established.";
+            document.getElementById('auth-status').style.color = "var(--success)";
+        } else {
+            document.getElementById('auth-overlay').style.display = 'flex';
+            document.getElementById('app-container').style.display = 'none';
+        }
+    });
+
+    const initAuth = async () => {
+        try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (error) {}
+    };
+    initAuth();
+
+    function formatDate(date) {
+        if (!date) return "";
+        const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+        return `${String(date.getDate()).padStart(2, '0')}-${months[date.getMonth()]}-${date.getFullYear()}`;
+    }
+
+    function parseDate(str) {
+        if (!str) return null;
+        const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+        const parts = str.toUpperCase().split("-");
+        if (parts.length !== 3) return null;
+        const monthIdx = months.indexOf(parts[1]);
+        if (monthIdx === -1) return null;
+        return new Date(parseInt(parts[2]), monthIdx, parseInt(parts[0]));
+    }
+
+    function showError(title, message) {
+        document.getElementById('error-title').innerText = title;
+        document.getElementById('error-msg').innerText = message;
+        document.getElementById('login-view').style.display = 'none';
+        document.getElementById('unauthorized-view').style.display = 'block';
+        document.getElementById('auth-overlay').style.display = 'flex';
+    }
+
+    document.getElementById('login-btn').onclick = async () => {
+        const id = document.getElementById('login-id').value.trim();
+        const pass = document.getElementById('login-pass').value.trim();
+        if (!id || !pass) return;
+        const codeSuffixRegex = /(855|866|877|888)$/;
+        if (pass.match(codeSuffixRegex)) {
+            currentUserProfile = { name: id, displayName: `${id} (${pass.slice(-3)})` };
+            forceSystemReset(true);
+            document.getElementById('auth-overlay').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            document.getElementById('user-name').value = currentUserProfile.displayName.toUpperCase();
+        } else {
+            showError("UNAUTHORIZED USER", "Access code invalid.");
+        }
+    };
+
+    document.getElementById('try-again-btn').onclick = () => {
+        if (currentUserProfile) document.getElementById('auth-overlay').style.display = 'none';
+        else {
+            document.getElementById('unauthorized-view').style.display = 'none';
+            document.getElementById('login-view').style.display = 'block';
+        }
+    };
+
+    function calculateExpiry() {
+        const mfgVal = mfgInput.value;
+        const parts = mfgVal.split("-");
+        if (parts.length !== 3 || durInput.value === 'custom') return;
+        const mfgDate = parseDate(mfgVal);
+        if (!mfgDate) return;
+        const expDate = new Date(mfgDate);
+        expDate.setMonth(expDate.getMonth() + parseInt(durInput.value));
+        expDate.setDate(expDate.getDate() - 1); 
+        expInput.value = formatDate(expDate);
+        updatePreview();
+    }
+
+    function logEvent(type) {
+        if (!currentUserProfile) return;
+        const pages = parseInt(qtyInput.value) || 1;
+        printHistory.push({
+            timestamp: new Date().toLocaleString(),
+            user: currentUserProfile.displayName, 
+            type: `${type} (${pages} Pages)`, 
+            lot: lotInput.value.toUpperCase(), mfg: mfgInput.value.toUpperCase(), exp: expInput.value.toUpperCase()
+        });
+    }
+
+    function updatePreview() {
+        const lot = lotInput.value.trim().toUpperCase();
+        const mfg = mfgInput.value.trim().toUpperCase();
+        const exp = expInput.value.trim().toUpperCase();
+        const numPagesRequired = parseInt(qtyInput.value) || 0;
+        
+        if (!lot || !mfg || !exp || numPagesRequired < 1) {
+            sheetPreview.style.display = 'none';
+            return;
+        }
+
+        sheetPreview.style.display = 'flex';
+        sheetPreview.innerHTML = "";
+        for (let p = 0; p < numPagesRequired; p++) {
+            const pageDiv = document.createElement('div');
+            pageDiv.className = 'page';
+            const gridDiv = document.createElement('div');
+            gridDiv.className = 'grid';
+            for (let i = 0; i < 44; i++) {
+                const div = document.createElement('div');
+                div.className = 'sticker filled';
+                div.innerHTML = `<div class="sticker-line"><span class="sticker-label">Lot No:</span><span>${lot}</span></div>
+                                 <div class="sticker-line"><span class="sticker-label">MFG:</span><span>${mfg}</span></div>
+                                 <div class="sticker-line"><span class="sticker-label">EXP:</span><span>${exp}</span></div>`;
+                gridDiv.appendChild(div);
+            }
+            pageDiv.appendChild(gridDiv);
+            sheetPreview.appendChild(pageDiv);
+        }
+    }
+
+    const executeAutoCSVSave = () => {
+        let csvContent = "Timestamp,Operator,Event,Lot Number,MFG Date,EXP Date\n";
+        printHistory.forEach(row => { 
+            csvContent += `"${row.timestamp}","${row.user}","${row.type}","${row.lot}","${row.mfg}","${row.exp}"\n`; 
+        });
+        const a = document.createElement('a'); 
+        a.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })); 
+        a.download = `Production_Master_Log.csv`; 
+        document.body.appendChild(a);
+        a.click(); 
+        document.body.removeChild(a);
+    };
+
+    const executeGDocsExport = () => {
+        const lot = lotInput.value.toUpperCase();
+        const mfg = mfgInput.value.toUpperCase();
+        const exp = expInput.value.toUpperCase();
+        const numPages = parseInt(qtyInput.value) || 1;
+
+        let tableContent = "";
+        for (let p = 0; p < numPages; p++) {
+            tableContent += `<div style="page-break-after: always; width: 210mm; display: block; text-align: center;">`;
+            tableContent += `<table align="center" style="border-collapse: collapse; border: none; width: 8in; margin: 0.345in auto 0 auto;">`;
+            for (let rowIdx = 0; rowIdx < 8; rowIdx++) { 
+                tableContent += `<tr style="height: 1in;">`;
+                for (let colIdx = 0; colIdx < 4; colIdx++) { 
+                    tableContent += `
+                        <td style="width: 2in; height: 1in; border: 0.5pt solid black; padding: 5px; vertical-align: middle; text-align: center;">
+                            <div style="font-family: Arial; font-size: 8.5pt; line-height: 1.4;">
+                                <div><b>Lot No: ${lot}</b></div>
+                                <div><b>MFG: ${mfg}</b></div>
+                                <div><b>EXP: ${exp}</b></div>
+                            </div>
+                        </td>`;
+                }
+                tableContent += `</tr>`;
+            }
+            tableContent += `</table></div>`;
+        }
+
+        const htmlBlob = `<html><head><meta charset='utf-8'><style>@page { size: 210mm 297mm; margin: 0; } body { margin: 0; padding: 0; }</style></head>
+            <body style="margin:0; padding:0;">${tableContent}</body></html>`;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob(['\ufeff', htmlBlob], { type: 'application/msword' }));
+        link.download = `Batch_Labels_${lot}.doc`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        forceSystemReset(false); 
+        document.getElementById('custom-modal').style.display = 'none';
+    };
+
+    const attemptPrint = () => {
+        lcd.innerText = "COMMUNICATING WITH PRINTER...";
+        lcd.style.color = "#ff9800"; 
+        setTimeout(() => {
+            const printerAvailable = false; 
+            if (!printerAvailable) {
+                lcd.innerText = "NO PRINTER DETECTED";
+                lcd.style.color = "#ef4444"; 
+                verificationView.style.display = 'none';
+                printerErrorView.style.display = 'block';
+            } else {
+                logEvent("Direct Print");
+                executeAutoCSVSave(); 
+                window.print();
+                forceSystemReset(false);
+                document.getElementById('custom-modal').style.display = 'none';
+            }
+        }, 1200);
+    };
+
+    document.getElementById('generateBtn').onclick = () => {
+        const mfgRaw = mfgInput.value.trim();
+        const expRaw = expInput.value.trim();
+        const lot = lotInput.value.trim();
+        const pages = parseInt(qtyInput.value);
+
+        if (!lot) { showError("ERROR", "enter lot number"); return; }
+        if (!mfgRaw || !expRaw) { showError("ERROR", "must complete required entry"); return; }
+        
+        if (isNaN(pages) || pages < 1) { showError("NO NUMBER PAGES ENTERED", "Please provide a valid quantity."); return; }
+        if (pages > 32) { showError("ERROR", "MAX FOR 1 PRINTING JOB IS 32 PAGES"); return; }
+
+        const mfgDate = parseDate(mfgRaw);
+        const expDate = parseDate(expRaw);
+
+        if (mfgDate && expDate) {
+            if (mfgDate.getTime() >= expDate.getTime()) {
+                showError("WRONG DATES", "Manufacturing date must be earlier than Expiration date.");
+                return;
+            }
+        } else {
+            showError("ERROR", "Invalid date format. Use DD-MMM-YYYY.");
+            return;
+        }
+
+        updatePreview();
+        const confirmBox = document.getElementById('confirm-box');
+        confirmBox.innerHTML = `<div><strong>Operator:</strong> ${currentUserProfile.displayName}</div><div><strong>Lot No:</strong> ${lot.toUpperCase()}</div><div><strong>MFG:</strong> ${mfgRaw.toUpperCase()}</div><div><strong>EXP:</strong> ${expRaw.toUpperCase()}</div><div><strong>Quantity:</strong> ${pages} Pages</div>`;
+        document.getElementById('custom-modal').style.display = 'flex';
+    };
+
+    document.getElementById('modal-edit').onclick = () => { forceSystemReset(false); document.getElementById('custom-modal').style.display = 'none'; };
+    document.getElementById('modal-print').onclick = attemptPrint;
+    document.getElementById('printer-retry').onclick = attemptPrint;
+    document.getElementById('printer-continue').onclick = executeGDocsExport; 
+    document.getElementById('mfg').oninput = calculateExpiry;
+    document.getElementById('duration').onchange = () => { expInput.disabled = durInput.value !== 'custom'; if (!expInput.disabled) expInput.focus(); else calculateExpiry(); };
+
+    document.getElementById('logout-btn').onclick = () => { 
+        forceSystemReset(true); 
+        currentUserProfile = null; 
+        document.getElementById('login-id').value = "";
+        document.getElementById('login-pass').value = "";
+        document.getElementById('login-view').style.display = 'block';
+        document.getElementById('unauthorized-view').style.display = 'none';
+        document.getElementById('auth-overlay').style.display = 'flex'; 
+        document.getElementById('app-container').style.display = 'none'; 
+    };
+    
+    ['lot', 'pcs-count'].forEach(id => document.getElementById(id).addEventListener('input', updatePreview));
+</script>
+</body>
+</html>
